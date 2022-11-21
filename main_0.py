@@ -18,7 +18,7 @@ def send_welcome(message):
 def send_message(message):
     msg = bot.reply_to(message, "Yo wassup I'm eager to know what you're looking to forward..")
     bot.register_next_step_handler(msg, forward)
-
+    
 
 def forward(message):
     chat_id = message.chat.id
