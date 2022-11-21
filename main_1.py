@@ -67,7 +67,7 @@ except Exception as e:
 
 
 bot = telebot.TeleBot(API_KEY, parse_mode=None)
-# print([i + 1 for i in range(len(ast.literal_eval(Config.query.filter_by(sno=1).first().groups).keys()))])
+
 @bot.message_handler(commands=['forward', 'start'])
 def greet(message):
     if message.text == '/start':
@@ -78,14 +78,14 @@ def greet(message):
 def validate(message):
     pwd = message.text
     groups = "Please enter the group's serial number you want the message to be forwarded:\n"
-    global groups_list, config
+    global groups_keys, config
     config = Config.query.filter_by(sno=1).first()
     
     # string of dictionary from row is converted to dictionary using ast.literal_eval()
-    groups_list = ast.literal_eval(config.groups).keys()
+    groups_keys = ast.literal_eval(config.groups).keys()
     
     group_sno = 0
-    for group in groups_list:
+    for group in groups_keys:
         group_sno += 1
         groups += f'{group_sno}. {group}\n\n'
     
@@ -101,8 +101,8 @@ def context(message):
     group_sno = message.text
     try:
         group_sno = int(group_sno)
-        group_name = list(groups_list)[group_sno - 1]
-        if group_sno in [i + 1 for i in range(len(groups_list))]:
+        group_name = list(groups_keys)[group_sno - 1]
+        if group_sno in [i + 1 for i in range(len(groups_keys))]:
             msg = bot.reply_to(message, f'Please confirm the message you want to send to group {message.text}:')
             bot.register_next_step_handler(msg, forward)
         else:
@@ -114,7 +114,7 @@ def context(message):
 def forward(message):
     chat_id = message.chat.id
     sender = message.from_user.username
-    bot.send_message(-562184369, f'{message.text}')
+    bot.send_message(ast.literal_eval(config.groups)[group_name], f'{message.text}')
     bot.send_message(chat_id, f"Dear @{sender}, your message was forwarded to group '{group_name}'")
 
 bot.enable_save_next_step_handlers(delay=2)
