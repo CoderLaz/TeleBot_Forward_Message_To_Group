@@ -19,7 +19,8 @@ load_dotenv()
 DB_NAME = os.getenv('DB_NAME')
 SECRET_KEY = os.getenv('SECRET_KEY')
 API_KEY = os.getenv('API_KEY')
-PWD = os.getenv('PWD')
+PASSWORD = os.getenv('PASSWORD')
+CHAT_ID = os.getenv('GROUP')
 
 # using flask for maintaining sqlite db through sqlalchemy orm
 app = Flask(__name__)
@@ -49,7 +50,7 @@ def create_config():
     try:
         # checking if row already exists or else creating and adding new row
         if not Config.query.filter_by(sno=1).first():
-            pwd = PWD
+            pwd = PASSWORD
             created = updated = get_datetime()
             config = Config(pwd=generate_password_hash(pwd), auth='{}', created=created, updated=updated)
             db.session.add(config)
@@ -115,7 +116,7 @@ def forward(message):
     chat_id = message.chat.id
     # print('forwarded')
 
-    bot.send_message(-562184369, f'{message.text}')
+    bot.send_message(CHAT_ID, f'{message.text}')
     bot.send_message(chat_id, f"Hey @{username}, your message was forwarded.")
     message = bot.send_message(chat_id, f"Please send the signals now:")
     bot.register_next_step_handler(message, forward)
