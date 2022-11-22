@@ -19,6 +19,7 @@ load_dotenv()
 DB_NAME = os.getenv('DB_NAME')
 SECRET_KEY = os.getenv('SECRET_KEY')
 API_KEY = os.getenv('API_KEY')
+PWD = os.getenv('PWD')
 
 # using flask for maintaining sqlite db through sqlalchemy orm
 app = Flask(__name__)
@@ -39,6 +40,8 @@ class Config(db.Model):
     sno = db.Column(db.Integer, primary_key=True)
     pwd = db.Column(db.String(24), nullable=False)
     groups = db.Column(db.String)
+    # aaifl = auth and in_forwarding_loop, group name {username: [False, [False, Group]],}
+    aaifl = db.Column(db.String)
     created = db.Column(db.String(24), nullable=False)
     updated = db.Column(db.String(24), nullable=False)
 
@@ -50,7 +53,7 @@ def create_config():
             pwd = '12345678'
             groups = {'Forwarded Messages From @text_forwarding_bot': -562184369, 'second': -12345678, 'third': -12345678}
             created = updated = get_datetime()
-            config = Config(pwd=generate_password_hash(pwd), groups=str(groups), created=created, updated=updated)
+            config = Config(pwd=generate_password_hash(pwd), groups=str(groups), aaifl='{}', created=created, updated=updated)
             db.session.add(config)
             db.session.commit()
             print('SUCCESS: Database created successfully!')
@@ -66,30 +69,66 @@ except Exception as e:
         create_config()
 
 
+# Manually setting in_forward_loop to false during testing phase
+# config = Config.query.filter_by(sno=1).first()
+# aaifl = ast.literal_eval(config.aaifl)
+# aaifl['pro_laz'][1][0] = False
+# config.aaifl = str(aaifl)
+# db.session.add(config)
+# db.session.commit()
+# print('committed')
+
+
 bot = telebot.TeleBot(API_KEY, parse_mode=None)
+
+# string of dictionary from row is converted to dictionary using ast.literal_eval()
+groups_keys = ast.literal_eval(Config.query.filter_by(sno=1).first().groups).keys()
+groups = "Please enter the group's serial number you want the message to be forwarded:\n"
+group_sno = 0
+for group in groups_keys:
+    group_sno += 1
+    groups += f'{group_sno}. {group}\n\n'
+
 
 @bot.message_handler(commands=['forward', 'start'])
 def greet(message):
-    if message.text == '/start':
-        bot.reply_to(message, 'Dear User, Welcome to Text Forwarding Bot! Confirm password to begin using this bot..')
-    bot.register_next_step_handler(message, validate)
+    # print('inside greet')
+    global username
+    global aaifl
+    global config
+    
+
+    config = Config.query.filter_by(sno=1).first()
+    aaifl = ast.literal_eval(config.aaifl)
+    username = message.from_user.username
+    
+    if username in aaifl and aaifl[username][0]:
+        if aaifl[username][1][0]:
+            # print('forward called from greet')
+            bot.register_next_step_handler(message, forward)
+        else:
+            # print('context called from greet')
+            msg = bot.reply_to(message, groups)
+            bot.register_next_step_handler(msg, context)
+    elif message.text == '/start':
+        bot.send_message(f'Hi @{username}, Confirm password to begin using this bot..')
+        bot.register_next_step_handler(message, validate)
 
 
 def validate(message):
-    pwd = message.text
-    groups = "Please enter the group's serial number you want the message to be forwarded:\n"
-    global groups_keys, config
-    config = Config.query.filter_by(sno=1).first()
+    # print('inside validate')
+    text = message.text
     
-    # string of dictionary from row is converted to dictionary using ast.literal_eval()
-    groups_keys = ast.literal_eval(config.groups).keys()
-    
-    group_sno = 0
-    for group in groups_keys:
-        group_sno += 1
-        groups += f'{group_sno}. {group}\n\n'
-    
-    if check_password_hash(config.pwd, pwd):
+    if check_password_hash(config.pwd, text):
+        aaifl[username] = []
+        l = aaifl[username]
+        l.append(True)
+        l.append([False, list(groups_keys)[0]])
+        Config.query.filter_by(sno=1).first().aaifl = str(aaifl)
+        db.session.add(Config.query.filter_by(sno=1).first())
+        db.session.commit()
+        
+        # print('context called from validate')
         msg = bot.reply_to(message, groups)
         bot.register_next_step_handler(msg, context)
     else:
@@ -97,13 +136,20 @@ def validate(message):
 
 
 def context(message):
+    # print('inside context')
     global group_name
     group_sno = message.text
     try:
         group_sno = int(group_sno)
         group_name = list(groups_keys)[group_sno - 1]
         if group_sno in [i + 1 for i in range(len(groups_keys))]:
-            msg = bot.reply_to(message, f'Please confirm the message you want to send to group {message.text}:')
+            Config.query.filter_by(sno=1).first().aaifl = str(aaifl)
+            aaifl[username][1][1] = list(groups_keys)[group_sno - 1]
+            db.session.add(Config.query.filter_by(sno=1).first())
+            db.session.commit()
+            
+            # print('forward called from context')
+            msg = bot.reply_to(message, f"Please confirm the messages you want to send: (Enter '/quit' to exit)")
             bot.register_next_step_handler(msg, forward)
         else:
             bot.reply_to(message, f"Group {message.text} doesn't exist! Try Again!!")
@@ -112,10 +158,42 @@ def context(message):
 
 
 def forward(message):
+    # print('inside forward')
     chat_id = message.chat.id
-    sender = message.from_user.username
-    bot.send_message(ast.literal_eval(config.groups)[group_name], f'{message.text}')
-    bot.send_message(chat_id, f"Dear @{sender}, your message was forwarded to group '{group_name}'")
+    config = Config.query.filter_by(sno=1).first()
+    aaifl = ast.literal_eval(config.aaifl)
+    if message.text == '/quit':
+        # print('stopped')
+
+        aaifl[username][1][0] = False
+        config.aaifl = str(aaifl)
+        db.session.add(config)
+        db.session.commit()
+        
+        bot.send_message(chat_id, f"Stopped forwarding messages.. Restart the bot with '/start'...")
+        bot.register_next_step_handler(message, context)
+    elif message.text == '/start':
+        # print('stopped')
+
+        aaifl[username][1][0] = False
+        config.aaifl = str(aaifl)
+        db.session.add(config)
+        db.session.commit()
+
+        message = bot.reply_to(message, groups)
+        bot.register_next_step_handler(message, context)
+    else:
+        aaifl[username][1][0] = True
+        config.aaifl = str(aaifl)
+        db.session.add(config)
+        db.session.commit()
+
+        # print('forwarded')
+
+        bot.send_message(ast.literal_eval(config.groups)[aaifl[username][1][1]], f'{message.text}')
+        bot.send_message(chat_id, f"Hey @{username}, your message was forwarded.")
+        message = bot.send_message(chat_id, f"Please confirm the messages you want to send: (Enter '/quit' to exit)")
+        bot.register_next_step_handler(message, forward)
 
 bot.enable_save_next_step_handlers(delay=2)
 bot.load_next_step_handlers()
