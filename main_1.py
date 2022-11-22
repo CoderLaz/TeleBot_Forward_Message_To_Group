@@ -83,7 +83,7 @@ bot = telebot.TeleBot(API_KEY, parse_mode=None)
 
 # string of dictionary from row is converted to dictionary using ast.literal_eval()
 groups_keys = ast.literal_eval(Config.query.filter_by(sno=1).first().groups).keys()
-groups = "Please enter the group's serial number you want the message to be forwarded:\n"
+groups = "Password verification is successful ✅\n\nPlease send the signals now:\n"
 group_sno = 0
 for group in groups_keys:
     group_sno += 1
@@ -111,7 +111,7 @@ def greet(message):
             msg = bot.reply_to(message, groups)
             bot.register_next_step_handler(msg, context)
     elif message.text == '/start':
-        bot.send_message(f'Hi @{username}, Confirm password to begin using this bot..')
+        bot.reply_to(message, f'Hi @{username}, Confirm password to begin using this bot..')
         bot.register_next_step_handler(message, validate)
 
 
