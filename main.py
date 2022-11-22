@@ -20,7 +20,7 @@ DB_NAME = os.getenv('DB_NAME')
 SECRET_KEY = os.getenv('SECRET_KEY')
 API_KEY = os.getenv('API_KEY')
 PASSWORD = os.getenv('PASSWORD')
-CHAT_ID = os.getenv('GROUP')
+CHAT_ID = int(os.getenv('CHAT_ID'))
 
 # using flask for maintaining sqlite db through sqlalchemy orm
 app = Flask(__name__)
